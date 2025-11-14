@@ -322,7 +322,7 @@ def create_simultaneous_optimization_model(data_dict, tier_weights=None):
     return model, model_info
 
 
-def solve_simultaneous_optimization(model, model_info, time_limit=600, gap_tolerance=0.01):
+def solve_simultaneous_optimization(model, model_info, time_limit=300, gap_tolerance=0.03):
     """
     Solve the simultaneous optimization model.
     
@@ -554,7 +554,7 @@ def calculate_similarity_metrics(jury_analysis, jury_ids):
     return similarity_metrics
 
 
-def optimize_jury_assignment(data_dict, tier_weights=None, time_limit=600, gap_tolerance=0.01):
+def optimize_jury_assignment(data_dict, tier_weights=None, time_limit=300, gap_tolerance=0.03):
     """
     Main function to perform simultaneous jury assignment optimization.
     Optimizes all juries together to maximize similarity.
