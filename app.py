@@ -7,6 +7,23 @@ import uuid
 from datetime import datetime
 import shutil
 import numpy as np
+import psutil
+
+# Memory tracking
+peak_memory_mb = 0
+
+def log_memory_usage(stage):
+    """Log current memory usage and track peak"""
+    global peak_memory_mb
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    current_mb = mem_info.rss / 1024 / 1024
+    
+    if current_mb > peak_memory_mb:
+        peak_memory_mb = current_mb
+    
+    print(f"[{stage}] Memory: {current_mb:.2f} MB (Peak so far: {peak_memory_mb:.2f} MB)")
+    return current_mb
 
 # Import configuration
 from config import UPLOAD_FOLDER, RESULTS_FOLDER, ALLOWED_EXTENSIONS, MAX_CONTENT_LENGTH
@@ -91,6 +108,10 @@ def upload_file():
     
     # Check if the file is allowed
     if file and allowed_file(file.filename):
+        # Reset peak memory for this session
+        global peak_memory_mb
+        peak_memory_mb = 0
+        
         # Create a session folder for results
         session_folder = create_session_folder()
         
@@ -102,7 +123,7 @@ def upload_file():
         # Store file path in session
         session['file_path'] = file_path
         
-         # Get form data
+        # Get form data
         num_juries = int(request.form.get('num_juries', 2))
         jury_size = int(request.form.get('jury_size', 12))
         
@@ -127,12 +148,15 @@ def upload_file():
         
         # Process data and run optimization
         try:
+            log_memory_usage("START - Before data processing")
+            
             print(f"Using {optimization_method} optimization method")
             
             # Route to appropriate optimization method
             if optimization_method == 'sequential':
                 print("Starting sequential jury optimization...")
                 
+                log_memory_usage("Loading data (Sequential)")
                 # Process data with sequential method
                 data_dict = process_juror_data(file_path, num_juries, jury_size)
                 
@@ -140,12 +164,15 @@ def upload_file():
                 if 'original_data' in data_dict and isinstance(data_dict['original_data'], pd.DataFrame):
                     data_dict['original_data'].columns = [col.replace(' ', '_') for col in data_dict['original_data'].columns]
                 
+                log_memory_usage("Before Sequential Optimization")
                 # Run sequential optimization
                 results = optimize_jury_assignment(data_dict, rankings)
+                log_memory_usage("After Sequential Optimization")
                 
             else:  # simultaneous (DEFAULT)
                 print("Starting simultaneous jury optimization...")
                 
+                log_memory_usage("Loading data (Simultaneous)")
                 # Process data with simultaneous method
                 data_dict = process_juror_data_simultaneous(file_path, num_juries, jury_size)
                 
@@ -160,11 +187,14 @@ def upload_file():
                     'tier3_marital': rankings['Marital']
                 }
                 
+                log_memory_usage("Before Simultaneous Optimization")
                 # Run simultaneous optimization
                 results = optimize_jury_assignment_simultaneous(data_dict, tier_weights)
+                log_memory_usage("After Simultaneous Optimization")
             
             print(f"{optimization_method.capitalize()} optimization completed successfully.")
             
+            log_memory_usage("Saving results to JSON")
             # Save results to JSON (common for both methods)
             results_file = os.path.join(session_folder, 'results.json')
             
@@ -177,10 +207,22 @@ def upload_file():
             with open(results_file, 'w') as f:
                 json.dump(results, f, default=json_numpy_serializer)
             
+            log_memory_usage("Exporting assignments for editing")
             # Export jury assignments for editing
             edit_file_path = os.path.join(session_folder, "jury_assignments_for_editing.xlsx")
             export_assignments_for_editing(results, edit_file_path)
             session['edit_file_path'] = edit_file_path
+            
+            # FINAL MEMORY REPORT
+            print("\n" + "="*70)
+            print("MEMORY USAGE REPORT")
+            print("="*70)
+            print(f"Peak Memory Used: {peak_memory_mb:.2f} MB")
+            print(f"Optimization Method: {optimization_method.capitalize()}")
+            print(f"Number of Juries: {num_juries}")
+            print(f"Jury Size: {jury_size}")
+            print(f"Total Jurors Processed: {len(data_dict['original_data'])}")
+            print("="*70 + "\n")
             
             # Redirect to edit page
             return redirect(url_for('edit_assignments'))
@@ -189,6 +231,14 @@ def upload_file():
             import traceback
             print(f"ERROR: {str(e)}")
             print(traceback.format_exc())
+            
+            # Print memory even on error
+            print("\n" + "="*70)
+            print("MEMORY AT ERROR")
+            print("="*70)
+            print(f"Peak Memory Used: {peak_memory_mb:.2f} MB")
+            print("="*70 + "\n")
+            
             flash(f"Error processing data: {str(e)}")
             return redirect(url_for('index'))
     
