@@ -209,7 +209,7 @@ def create_single_jury_optimization_model(data_dict, jury_number, remaining_juro
     return model, model_info
 
 
-def solve_single_jury_optimization(model, model_info, time_limit=300):
+def solve_single_jury_optimization(model, model_info, time_limit=200):
     """
     Solve optimization model for a single jury.
     
@@ -456,7 +456,7 @@ def calculate_target_distributions_for_jury(remaining_juror_indices, jury_size, 
     return target_distributions
 
 
-def optimize_jury_assignment(data_dict, priority_weights=None, time_limit=300):
+def optimize_jury_assignment(data_dict, priority_weights=None, time_limit=200):
     """
     Main function to perform sequential jury assignment optimization.
     Optimizes juries one at a time to ensure complete jury filling.

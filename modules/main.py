@@ -91,7 +91,7 @@ def run_optimization_pipeline(
     jury_size, 
     demographic_vars=None,
     priority_weights=None,
-    time_limit=300,
+    time_limit=200,
     output_dir=None,
     export_excel=True,
     create_report=True,
