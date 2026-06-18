@@ -78,7 +78,34 @@ def create_simultaneous_optimization_model(data_dict, tier_weights=None):
         # Get indices for P-leaning and D-leaning jurors
         p_overall_indices = df[df['Final_Leaning'].isin(['P', 'P+'])].index.tolist()
         d_overall_indices = df[df['Final_Leaning'].isin(['D', 'D+'])].index.tolist()
-        
+        # Pull targets calculated by data_processing_sim.py
+        feasibility_info = data_dict['feasibility_info']
+        p_target = feasibility_info['p_target_per_jury']
+        d_target = feasibility_info['d_target_per_jury']
+
+        # For each jury, penalize deviation from the per-jury target
+        for j in jury_ids:
+            if p_overall_indices:
+                p_target_dev_plus  = LpVariable(f"P_Target_Dev_Plus_J{j}",  lowBound=0)
+                p_target_dev_minus = LpVariable(f"P_Target_Dev_Minus_J{j}", lowBound=0)
+                
+                p_count_j = lpSum(x[(i, j)] for i in p_overall_indices)
+                model += p_count_j - p_target == p_target_dev_plus - p_target_dev_minus, f"P_Target_Dev_J{j}"
+                
+                objective_terms.append(tier_weights['tier1_pd_balance'] * (p_target_dev_plus + p_target_dev_minus))
+                deviation_vars[f'P_Target_J{j}'] = {'plus': p_target_dev_plus, 'minus': p_target_dev_minus}
+            
+            if d_overall_indices:
+                d_target_dev_plus  = LpVariable(f"D_Target_Dev_Plus_J{j}",  lowBound=0)
+                d_target_dev_minus = LpVariable(f"D_Target_Dev_Minus_J{j}", lowBound=0)
+                
+                d_count_j = lpSum(x[(i, j)] for i in d_overall_indices)
+                model += d_count_j - d_target == d_target_dev_plus - d_target_dev_minus, f"D_Target_Dev_J{j}"
+                
+                objective_terms.append(tier_weights['tier1_pd_balance'] * (d_target_dev_plus + d_target_dev_minus))
+                deviation_vars[f'D_Target_J{j}'] = {'plus': d_target_dev_plus, 'minus': d_target_dev_minus}
+
+        print(f"TIER 1: Added per-jury P/D target deviation constraints (target: {p_target}P, {d_target}D per jury)")
         # For each pair of juries, minimize difference in P and D counts
         for j1, j2 in combinations(jury_ids, 2):
             # P-leaning difference

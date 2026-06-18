@@ -6,6 +6,8 @@ import numpy as np
 def load_juror_data(file_path):
     """
     Load juror data from an Excel file.
+    Scans up to 200 rows to find the header row containing Name and Final_Leaning.
+    Column names are normalized to the expected casing after loading.
     
     Parameters:
     file_path (str): Path to the Excel file containing juror data
@@ -13,8 +15,44 @@ def load_juror_data(file_path):
     Returns:
     pandas.DataFrame: Loaded juror dataframe
     """
+    COLUMN_NAME_MAP = {
+        'name': 'Name',
+        'final_leaning': 'Final_Leaning',
+        'gender': 'Gender',
+        'race': 'Race',
+        'age': 'Age',
+        'agegroup': 'AgeGroup',
+        'education': 'Education',
+        'marital': 'Marital',
+    }
+
     try:
-        df = pd.read_excel(file_path)
+        # Scan up to 200 rows to find the header row
+        raw = pd.read_excel(file_path, header=None)
+        header_row = None
+        for i, row in raw.iterrows():
+            row_lower = [str(v).strip().lower() for v in row.values]
+            if 'name' in row_lower and 'final_leaning' in row_lower:
+                header_row = i
+                break
+
+        if header_row is None:
+            raise Exception("Could not find a header row containing 'Name' and 'Final_Leaning' in the first 200 rows")
+
+        if header_row > 0:
+            print(f"Found header row at row {header_row + 1} (skipped {header_row} rows)")
+
+        # Reload with the correct header row
+        df = pd.read_excel(file_path, header=header_row)
+
+        # Normalize column names to expected casing
+        normalized = {}
+        for col in df.columns:
+            col_lower = str(col).strip().lower().replace(' ', '_').replace('\n', '_')
+            if col_lower in COLUMN_NAME_MAP:
+                normalized[col] = COLUMN_NAME_MAP[col_lower]
+        df = df.rename(columns=normalized)
+
         print(f"Successfully loaded data with {len(df)} jurors")
         return df
     except Exception as e:
@@ -36,8 +74,9 @@ def validate_juror_data(df, required_columns=None, drop_missing=False):
     if required_columns is None:
         required_columns = ['Name', 'Final_Leaning']
     
-    # Check required columns
-    missing_columns = [col for col in required_columns if col not in df.columns]
+    # Check required columns (case-insensitive)
+    df_cols_lower = [c.lower() for c in df.columns]
+    missing_columns = [col for col in required_columns if col.lower() not in df_cols_lower]
     if missing_columns:
         return False, f"Missing required columns: {', '.join(missing_columns)}", df
     
